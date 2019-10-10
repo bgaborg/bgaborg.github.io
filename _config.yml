@@ -24,7 +24,7 @@ github_username:  bgaborg
 
 # Build settings
 markdown: kramdown
-theme: tactile
+theme: jekyll-theme-tactile
 plugins:
   - jekyll-feed
 
