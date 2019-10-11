@@ -1,0 +1,3 @@
+Db to test with: https://couchdb.apache.org/
+
+Bloom filter: using my own implementation. Need to search for an academic paper to implement from, and add as a source.
