@@ -17,7 +17,7 @@ title: kugel magnetik
 email: gab.bota@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Better not speak about the weather when the cloud is all you see.
-baseurl: "bgaborg.github.io" # the subpath of your site, e.g. /blog
+baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://bgaborg.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: 4spir
 github_username:  bgaborg
