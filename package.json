@@ -1,0 +1,20 @@
+{
+  "name": "bgaborg.github.io",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "biome format --write assets/js && tsc",
+    "format": "biome format --write assets/js",
+    "lint": "biome lint assets/js",
+    "check": "biome check --write assets/js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.10.0",
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.4",
+    "typescript": "^5.9.3"
+  }
+}

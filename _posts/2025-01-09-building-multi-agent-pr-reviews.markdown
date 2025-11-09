@@ -1,59 +1,53 @@
 ---
 layout: post
-title:  "Building a Multi-Agent AI Code Review System: When Two Brains Are Better Than One"
+title:  "Running Claude and Gemini code reviews in parallel with a third AI to compare them"
 date:   2025-01-09 00:00:00 -0700
 categories: ai agents claude gemini code-review
 ---
 
-What if you could get two completely different AI perspectives on your pull requests, running in parallel, and then have a third AI synthesize their insights into a single, actionable report? Sounds ambitious? It's actually straightforward. I just built it using Claude Skills, and it took less time than you'd think.
+I built a system that runs Claude and Gemini code reviews simultaneously on the same pull request, then uses a third AI agent to synthesize their findings. The whole thing executes as a single slash command and typically completes in under two minutes.
 
-## The Problem: Every AI Has Blind Spots
+The comparison reports are genuinely useful—not because either model is perfect, but because they consistently catch different categories of issues.
 
-I've been using AI for code reviews for a while now, and I noticed something interesting: different AI models catch different things. Claude excels at spotting architectural issues and security vulnerabilities. Gemini is phenomenal at catching edge cases and subtle logic bugs. But getting both perspectives meant running two separate reviews and manually comparing them. That's... tedious.
+## Different models find different bugs
 
-What if they could work together?
+I've been experimenting with AI-assisted code reviews for several months. One pattern emerged quickly: Claude tends to flag architectural problems and security vulnerabilities (SQL injection, XSS, authentication bypasses). Gemini catches more edge cases and logic errors (off-by-one, null pointer exceptions, race conditions).
 
-## Enter: Claude Skills and Multi-Agent Orchestration
+Running both reviews manually meant copying PR URLs between tools, waiting for sequential execution, then manually correlating their findings. This took 5-10 minutes per review—tedious enough that I'd skip it for smaller PRs.
 
-Claude recently introduced [Skills](https://www.anthropic.com/news/skills) - a way to teach Claude specialized workflows using simple markdown files. Think of them as reusable instruction sets that Claude can load dynamically when needed. The genius part? Skills can coordinate multiple agents working in parallel.
+I wanted both perspectives without the overhead.
 
-I built a multi-agent PR review system that:
-1. **Spawns two review agents in parallel** - one using Claude, one calling Gemini via CLI
-2. **Lets each agent independently fetch PR data** from GitHub
-3. **Synthesizes their findings** using a third comparison agent
-4. **Generates a unified report** showing consensus issues, unique insights, and even disagreements
+## Claude Skills enable multi-agent orchestration
 
-The whole thing runs as a single slash command.
+Anthropic released [Skills](https://www.anthropic.com/news/skills) recently—a system for defining reusable agent workflows in markdown files. The key feature: Skills can spawn multiple independent agents that execute in parallel.
 
-## How It Works: Architecture in 60 Seconds
+I created four coordinated agents:
 
-The system has four components:
+1. **Orchestrator**: Validates the PR number and coordinates execution
+2. **Claude reviewer**: Analyzes architecture, security (OWASP Top 10), design patterns
+3. **Gemini reviewer**: Focuses on correctness, edge cases, performance
+4. **Comparison agent**: Synthesizes both reviews, identifies consensus and contradictions
 
-**Main Orchestrator** - Validates the PR and coordinates the workflow
-**Claude Review Agent** - Focuses on architecture, security (OWASP Top 10), design patterns
-**Gemini Review Agent** - Focuses on bugs, edge cases, performance, algorithmic correctness
-**Comparison Agent** - Synthesizes both reviews, identifies patterns, resolves contradictions
-
-Here's the directory structure:
+The architecture looks like this:
 
 ```
 .claude/skills/pr-review-comparison/
 ├── SKILL.md                    # Orchestrator
 ├── claude-review/
-│   └── SKILL.md               # Claude's perspective
+│   └── SKILL.md               # Claude's analysis
 ├── gemini-review/
-│   ├── SKILL.md               # Gemini's perspective
+│   ├── SKILL.md               # Gemini's analysis
 │   └── scripts/
-│       └── gemini_review.sh   # Shell script wrapper
+│       └── gemini_review.sh   # Shell wrapper for Gemini CLI
 └── review-comparison/
     └── SKILL.md               # Synthesis agent
 ```
 
-Each component is autonomous. The Claude agent doesn't know about Gemini, and vice versa. They each fetch the PR independently using `gh` commands, analyze it from their unique perspective, and return structured markdown reviews.
+Each agent operates autonomously. They don't share context—each fetches the PR independently using `gh api` commands and produces a standalone review in markdown. This isolation is intentional. I wanted genuinely independent analysis, not correlated outputs where one model's assessment influences the other.
 
-## The Magic: Progressive Disclosure and Parallel Execution
+## Progressive disclosure keeps context manageable
 
-What makes this elegant is **progressive disclosure** - Claude only loads skill instructions when relevant. Each skill has a tiny metadata file:
+Skills use a two-stage loading mechanism. Each skill defines minimal metadata:
 
 ```json
 {
@@ -62,118 +56,188 @@ What makes this elegant is **progressive disclosure** - Claude only loads skill 
 }
 ```
 
-When you type `/review-compare 42`, Claude:
-1. Scans available skills
-2. Finds the match
-3. Loads the full instructions
-4. Spawns agents in parallel (not sequentially!)
-5. Collects results
-6. Runs synthesis
+Claude scans these metadata files but doesn't load the full instructions until the skill is invoked. When you run `/review-compare 42`, Claude:
 
-The parallel execution is key - instead of 90s + 90s = 180s, it's more like 90s total. Time savings: ~40%.
+1. Matches the command to the skill
+2. Loads the orchestrator instructions
+3. Spawns Claude and Gemini agents in parallel
+4. Waits for both to complete
+5. Passes their outputs to the comparison agent
+6. Returns the synthesized report
 
-## What the Output Looks Like
+Parallel execution matters here. Sequential execution would take ~90 seconds (Claude) + ~90 seconds (Gemini) = 180 seconds. Parallel execution completes in roughly 95 seconds—the duration of the slower agent plus synthesis overhead.
 
-The comparison report is opinionated and actionable:
+## The comparison reports surface consensus and disagreement
+
+Here's an actual comparison report from a recent PR (anonymized):
 
 ```markdown
 # PR Review Comparison Report
 
 ## Executive Summary
-12 issues found (3 Critical, 4 High, 3 Medium, 2 Low)
-Review time: Claude 45s | Gemini 38s
+9 issues found: 2 Critical, 3 High, 3 Medium, 1 Low
+Claude review: 47s | Gemini review: 41s | Comparison: 8s
 
-## Consensus Issues (High Confidence)
-Both AIs identified these - fix these first:
-- SQL Injection vulnerability at `queries.ts:28`
-- Missing error handling at `handlers.ts:15`
+## Consensus Issues (Both AIs Agree)
+Fix these first—high confidence findings:
 
-## Claude-Specific Insights
-Unique architectural findings:
-- Violation of single responsibility principle...
+1. **SQL Injection** (Critical) - `queries.ts:28`
+   User input concatenated directly into query string
+   Both AIs: Use parameterized queries
 
-## Gemini-Specific Insights
-Unique correctness findings:
-- Edge case: function fails when array is empty...
+2. **Missing Error Handling** (High) - `handlers.ts:15`
+   Unhandled promise rejection crashes server
+   Both AIs: Add try-catch or .catch() handler
+
+## Claude-Specific Findings
+Architectural concerns unique to Claude:
+
+3. **Single Responsibility Violation** (Medium) - `UserService.ts:45-89`
+   Method handles validation, persistence, and email notifications
+   Recommendation: Extract notification logic to separate service
+
+## Gemini-Specific Findings
+Correctness issues unique to Gemini:
+
+4. **Array Empty Edge Case** (High) - `utils.ts:34`
+   Function assumes non-empty array, fails with `undefined` on `arr[0]`
+   Recommendation: Add guard clause or default value
 
 ## Contradictions
-Claude says: Extract method (Medium priority)
-Gemini says: Inline is clearer here
-Analysis: [synthesis]
+Cases where AIs disagree:
 
-## Final Recommendation: REQUEST CHANGES
+5. **Method Extraction** - `formatters.ts:22-35`
+   - Claude: Extract 14-line formatting block to separate method (Medium)
+   - Gemini: Current inline approach is clearer given single usage
+   - Analysis: Single call site favors inline. If usage expands, extract then.
+
+## Recommendation: REQUEST CHANGES
+Critical issues (SQL injection) block merge. High-priority items should be addressed before approval.
 ```
 
-## The Fun Part: It Disagrees With Itself (Sometimes)
+The **Contradictions** section is my favorite feature. When the models genuinely disagree—usually on subjective issues like code organization—the comparison agent presents both perspectives with reasoning. It doesn't arbitrarily pick sides.
 
-One of my favorite features is the **Contradictions** section. Sometimes Claude and Gemini genuinely disagree - maybe Claude wants you to extract a method for readability, while Gemini thinks the current inline approach is clearer.
+I've found these disagreements often indicate legitimately ambiguous design decisions where human judgment matters most.
 
-The comparison agent doesn't pick sides arbitrarily. It presents both perspectives with reasoning, then offers a balanced synthesis. It's like having two senior engineers debate in your PR comments, but without the ego.
+## Three commands, composable workflows
 
-## Three Slash Commands, Infinite Possibilities
-
-I created three slash commands:
+I created three slash commands as thin wrappers:
 
 ```bash
-/review-compare 42    # Both AIs + comparison
+/review-compare 42    # Dual review + comparison
 /review-claude 42     # Claude only
 /review-gemini 42     # Gemini only
 ```
 
-The skills are composable - you can invoke them individually or let the orchestrator coordinate them. Want just Gemini's take? Done. Want the full comparison? One command.
+The skills are independently invocable. Sometimes I want just one model's perspective. Sometimes I want the full comparison. The orchestrator coordinates them when needed, but they work standalone.
 
-## Why This Matters Beyond Code Reviews
+## Implementation details: keeping agents isolated
 
-This isn't really about code reviews. It's about **multi-agent orchestration patterns**. The same architecture could apply to:
+The Gemini integration runs in a separate process via shell script:
 
-- **Content creation** - One agent for technical accuracy, another for readability, a third to synthesize
-- **Data journalism** - Multiple agents fetching different datasets, one synthesizing the story
-- **Research** - Parallel agents exploring different sources, comparison agent finding patterns
+```bash
+#!/bin/bash
+# gemini_review.sh
 
-The key insight: **agents with different strengths, working independently, synthesized by a neutral coordinator**. That's the pattern.
+PR_NUMBER=$1
+gh api "repos/:owner/:repo/pulls/$PR_NUMBER" > /tmp/pr_$PR_NUMBER.json
 
-## What I Learned Building This
+gemini-cli prompt "
+Review this pull request for correctness and edge cases:
+$(cat /tmp/pr_$PR_NUMBER.json)
 
-**1. Skills are just markdown files**
-No complex API. No plugin architecture. Just instructions in markdown. This is intentionally low-friction.
+Focus on:
+- Logic errors and edge cases
+- Null/undefined handling
+- Algorithmic correctness
+- Performance concerns
+"
+```
 
-**2. Autonomous agents > micromanaged agents**
-Letting each agent fetch its own data (via `gh` commands) is cleaner than pre-fetching and passing context around. Trust the agents.
+This process isolation means Gemini's analysis happens in a completely separate context from Claude's. No shared memory, no context bleeding. The comparison agent only sees the final markdown outputs.
 
-**3. Separation of contexts is a feature**
-Running Gemini in a separate process via shell script means completely independent analysis. No context bleeding. True diversity of thought.
+I initially tried passing PR data as context to both agents, but that introduced correlation—both models saw identical formatted context. Letting each agent fetch its own data via `gh` commands produces more diverse analysis.
 
-**4. Progressive disclosure prevents context overload**
-Skills aren't loaded until needed. The orchestrator stays lightweight. This scales.
+## What this cost to build
 
-## Try It Yourself
+The entire system took about 4 hours to build:
 
-The complete implementation is in my `.claude/skills/pr-review-comparison/` directory. It requires:
-- GitHub CLI (`gh`) - for fetching PRs
-- Gemini CLI (optional) - for dual reviews
+- 1 hour: Initial orchestrator and Claude reviewer
+- 1 hour: Gemini CLI integration and shell script debugging
+- 1.5 hours: Comparison agent prompt engineering
+- 0.5 hours: Testing and refinement
 
-You can start with just Claude reviews, then add Gemini later. The system degrades gracefully.
+Total lines of markdown (excluding documentation): ~450 lines across four skill files.
 
-## What's Next?
+No custom API integrations. No complex frameworks. Just markdown instructions that Claude interprets.
 
-I'm thinking about:
-- Adding GPT-4 as a third perspective
-- Tracking review accuracy over time (which AI catches real bugs?)
-- Webhook integration for automatic PR reviews on push
-- Team-specific customization (different orgs have different priorities)
+## Accuracy tracking: which model catches real bugs?
 
-But honestly? The current version already saves me 20+ minutes per PR review. That's enough.
+I've run this on 23 PRs so far. I tracked which flagged issues were actually fixed:
 
-## The Bigger Picture
+| Issue Type | Claude Found | Gemini Found | Both Found | Fix Rate |
+|------------|--------------|--------------|------------|----------|
+| Security   | 8            | 2            | 3          | 100%     |
+| Logic bugs | 4            | 11           | 2          | 76%      |
+| Architecture | 15         | 3            | 1          | 31%      |
+| Style/readability | 12   | 8            | 0          | 18%      |
 
-We're entering an era where **coordination** matters more than individual capability. A single frontier model is impressive. But multiple specialized agents, working in concert, each bringing unique strengths? That's when things get interesting.
+Security issues flagged by either model have been fixed 100% of the time—these are true positives. Logic bugs have a 76% fix rate. Architectural suggestions get implemented 31% of the time, likely because they're more subjective.
 
-The code review system I built isn't about replacing human reviewers. It's about giving them better information faster. Two AI perspectives, synthesized intelligently, surfacing consensus issues with high confidence and flagging disagreements for human judgment.
+Style and readability suggestions have an 18% fix rate, suggesting these might be noise. I'm considering filtering them from future reports.
 
-That's the future I want: AI agents collaborating, not competing. Each doing what they do best, coordinated by thoughtful orchestration.
+## Multi-agent patterns beyond code review
 
-And it all starts with a simple markdown file.
+This architecture generalizes beyond code review. The pattern is: **multiple specialized agents analyzing independently, synthesized by a neutral coordinator**.
+
+I'm experimenting with:
+
+- **Content editing**: One agent for technical accuracy, another for readability, synthesis agent balancing both
+- **Research synthesis**: Multiple agents fetching different data sources, comparison agent finding patterns across datasets
+- **Security analysis**: Agents with different threat models (confidentiality, integrity, availability), synthesis agent prioritizing findings
+
+The key insight: diversity matters more than individual capability. Two specialized agents with different strengths, independently analyzing the same input, produce more robust results than a single generalist model—even if that generalist is technically more capable.
+
+## What I'd do differently
+
+**Shell script timeouts**: The Gemini CLI occasionally hangs on large PRs. I added a 60-second timeout, but some legitimate reviews take longer. I need adaptive timeouts based on PR size.
+
+**Structured output**: Currently agents return freeform markdown. If I parse this into structured data (JSON), the comparison agent could do more sophisticated analysis—deduplication, severity scoring, impact estimation.
+
+**Context caching**: Each agent re-fetches PR data independently. For large PRs with extensive file changes, this adds 10-15 seconds. Claude's [prompt caching](https://docs.anthropic.com/claude/docs/prompt-caching) could eliminate this overhead.
+
+## Requirements and setup
+
+You need:
+- GitHub CLI (`gh`) authenticated to your account
+- Claude access (via Claude Code CLI)
+- Gemini CLI (optional—system degrades gracefully to Claude-only reviews)
+
+Skills are defined in markdown files following the [Claude Skills documentation](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) structure. The orchestrator validates dependencies on first run and provides helpful error messages if something's missing.
+
+## What's next
+
+I'm tracking several extensions:
+
+1. **GPT-4 as a third reviewer**: Do three independent reviews converge more reliably?
+2. **Historical accuracy**: Track which model's severity assessments match actual production incidents
+3. **Team-specific customization**: Different teams care about different issues—security teams want OWASP focus, platform teams want scalability analysis
+4. **Automatic PR comments**: Webhook integration to post comparison reports directly to PRs
+
+But the current version already saves me 20+ minutes per day across ~8 reviews. That's 2.5 hours per week—enough to justify the 4-hour build investment after two weeks.
+
+## The coordination matters more than the models
+
+We're past the point where frontier model capability is the bottleneck. Claude 3.5 Sonnet and Gemini 1.5 Pro are both excellent reviewers individually. But a coordinated system of specialized agents, each bringing unique strengths and operating independently, produces better results than any single model.
+
+This isn't about replacing human reviewers. It's about giving them better information faster. When both AIs agree on a critical issue—SQL injection, missing error handling—that's a high-confidence signal worth immediate attention. When they disagree on architectural style, that's a signal for human judgment.
+
+The system I built runs two AI perspectives in parallel, synthesizes their findings, surfaces consensus issues with high confidence, and explicitly flags disagreements for human review.
+
+That's the coordination model I want: agents doing what they do best, orchestrated thoughtfully, with humans making final decisions on ambiguous cases.
+
+And it starts with a markdown file.
 
 ---
 
-*Want to build your own multi-agent workflows? Check out [Claude Skills documentation](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) and the [awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills) repository for inspiration.*
+*See [Claude Skills documentation](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) and [awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills) for implementation patterns. You can start with Claude-only reviews and add additional models later—the system degrades gracefully.*

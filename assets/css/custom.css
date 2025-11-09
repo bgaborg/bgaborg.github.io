@@ -1,0 +1,37 @@
+/* Override theme default black background */
+body {
+  background: transparent;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.wrapper {
+  background: transparent;
+  padding-top: 10px;
+  margin-top: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glassmorphism effect for content section */
+section {
+  background: rgba(5, 5, 15, 0.05);
+  backdrop-filter: blur(25px) brightness(1.5) saturate(1.2);
+  -webkit-backdrop-filter: blur(25px) brightness(1.5) saturate(1.2);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 0;
+  margin-top: 0;
+}
+
+#title {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+#title h1 {
+  margin-top: 0;
+  padding-top: 0;
+}

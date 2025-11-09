@@ -17,3 +17,5 @@ h2. smaller header.
 `this is a single line`
 
 Hello `this` is a single line `code`.
+
+TEST - Livereload should work now!
