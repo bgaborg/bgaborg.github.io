@@ -1,4 +1,3 @@
-"use strict";
 // Morphing background with grey dots on black background
 // Simple and performant 3D particle system
 class MorphingBackground {
@@ -41,8 +40,45 @@ class MorphingBackground {
         this.animate();
     }
     resize() {
+        const oldWidth = this.canvas.width;
+        const oldHeight = this.canvas.height;
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
+        // Only transform if we had previous dimensions (not initial resize)
+        if (oldWidth > 0 && oldHeight > 0) {
+            const scaleX = this.canvas.width / oldWidth;
+            const scaleY = this.canvas.height / oldHeight;
+            this.transformParticles(scaleX, scaleY);
+            this.transformGravityPoints(scaleX, scaleY);
+        }
+    }
+    transformParticles(scaleX, scaleY) {
+        for (const p of this.particles) {
+            // Transform base positions (anchor points)
+            p.baseX *= scaleX;
+            p.baseY *= scaleY;
+            // Transform current positions
+            p.x *= scaleX;
+            p.y *= scaleY;
+            // z remains unchanged (depth independent)
+            // Scale velocity vectors
+            p.vx *= scaleX;
+            p.vy *= scaleY;
+            // vz remains unchanged
+            // Scale elliptical path radii to maintain relative motion
+            p.radiusX *= scaleX;
+            p.radiusY *= scaleY;
+            // radiusZ remains unchanged
+            // All other properties (angle, speed, offsets, rotation, shape) remain unchanged
+            // This preserves the motion state and orbital patterns
+        }
+    }
+    transformGravityPoints(scaleX, scaleY) {
+        for (const gp of this.gravityPoints) {
+            gp.x *= scaleX;
+            gp.y *= scaleY;
+            // z and strength remain unchanged
+        }
     }
     initGravityPoints() {
         this.gravityPoints = [];
