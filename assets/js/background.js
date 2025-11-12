@@ -27,11 +27,13 @@ class MorphingBackground {
         this.canvas.style.position = 'fixed';
         this.canvas.style.top = '0';
         this.canvas.style.left = '0';
-        this.canvas.style.width = '100%';
-        this.canvas.style.height = '100%';
+        this.canvas.style.width = '100vw';
+        this.canvas.style.height = '100vh';
         this.canvas.style.zIndex = '-1';
         this.canvas.style.background = '#000';
         document.body.insertBefore(this.canvas, document.body.firstChild);
+        // Also set body background to black for areas below viewport
+        document.body.style.background = '#000';
         this.ctx = this.canvas.getContext('2d');
         this.resize();
         this.initGravityPoints();
