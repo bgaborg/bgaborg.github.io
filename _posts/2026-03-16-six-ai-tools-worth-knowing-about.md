@@ -21,7 +21,13 @@ cd agency-agents
 
 Agents land in `~/.claude/agents/` and Claude Code auto-detects them as subagents. When it encounters a task matching an agent's description, it delegates. No conversion step needed - Claude Code reads native `.md` files.
 
-I checked whether [Kilo CLI](https://kilo.ai/) is supported. It isn't listed in the install script. Kilo does support custom subagents and the AGENTS.md open standard, so manual integration is theoretically possible, but there's no automated bridge today.
+I initially thought [Kilo CLI](https://kilo.ai/) wasn't supported - it isn't listed in the install script. But then I realized Kilo CLI is a fork of [OpenCode](https://github.com/opencode-ai/opencode), which Agency Agents _does_ natively support. Kilo CLI scans `.opencode/agents/` directories alongside its native `.kilo/agents/` paths for backward compatibility. So the OpenCode install works with zero modifications:
+
+```bash
+./scripts/install.sh --tool opencode
+```
+
+This drops the agent files into `.opencode/agents/` in your project, and Kilo CLI picks them up automatically. If you prefer the canonical Kilo location, copy them to `.kilo/agents/` or `~/.config/kilo/agents/` instead.
 
 ## MiroFish: simulating thousands of AI agents to predict the future
 
