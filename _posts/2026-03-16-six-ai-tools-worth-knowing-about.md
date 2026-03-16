@@ -29,6 +29,15 @@ I initially thought [Kilo CLI](https://kilo.ai/) wasn't supported - it isn't lis
 
 This drops the agent files into `.opencode/agents/` in your project, and Kilo CLI picks them up automatically. If you prefer the canonical Kilo location, copy them to `.kilo/agents/` or `~/.config/kilo/agents/` instead.
 
+One thing to be aware of: Claude Code and Kilo CLI use completely separate config directories. There's no cross-pollination.
+
+| Tool | Agent locations |
+|---|---|
+| Claude Code | `~/.claude/agents/`, `.claude/agents/` (project) |
+| Kilo CLI | `~/.config/kilo/agents/`, `.kilo/agents/`, `.opencode/agents/` |
+
+If you use both tools, you need to install agents separately for each - or symlink the `.md` files to both locations.
+
 ## MiroFish: simulating thousands of AI agents to predict the future
 
 This one is wild. [MiroFish](https://github.com/666ghj/MiroFish) is a swarm intelligence prediction engine built by Guo Hangjiang, an undergrad at Beijing University of Posts and Telecommunications. He reportedly built it in 10 days using vibe coding. It secured ~$4M investment from Shanda Group's founder.
